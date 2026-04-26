@@ -14,7 +14,7 @@ const SESSION_ID = uuidv4();
 const GREETING = {
   id: "greeting",
   role: "bot",
-  text: "Namaste! Main aapka Business Copilot hoon 👋\n\nAapki FY 25-26 sales aur purchase books pe grounded hoon. Hindi, English ya Hinglish mein puchhiye — neeche se shortcuts dabaiye ya khud type kijiye.",
+  text: "Namaste! Main HELIQx CT Business Copilot hoon.\n\nAapki FY 25-26 sales aur purchase books pe grounded hoon. Hindi, English ya Hinglish mein puchhiye - neeche se shortcuts dabaiye ya khud type kijiye.",
   time: nowTime(),
 };
 
@@ -79,7 +79,7 @@ export default function Copilot({ apiOnline = true }) {
               </svg>
             </div>
             <div>
-              <div className="copilot-title">Business Copilot</div>
+              <div className="copilot-title">HELIQx CT Copilot</div>
               <div className="copilot-sub">
                 <span className="online-dot" />
                 {!apiOnline ? "UI-only mode" : loading ? "typing..." : "online - grounded in your books"}

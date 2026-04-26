@@ -3,13 +3,6 @@ import { taskService } from "../../services/taskService";
 
 const STATUSES = ["Open", "In Progress", "Done", "Blocked", "Delayed"];
 const PRIORITIES = ["High", "Medium", "Low"];
-const BOARD_GROUPS = [
-  { key: "Open", title: "Open" },
-  { key: "In Progress", title: "In Progress" },
-  { key: "Done", title: "Done" },
-  { key: "Blocked/Delayed", title: "Blocked / Delayed" },
-];
-
 function todayString(offset = 0) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -42,6 +35,17 @@ function priorityClass(priority) {
 
 function statusClass(status) {
   return `task-status-${status.toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+function statusLabel(status) {
+  const labels = {
+    Open: "Open",
+    "In Progress": "In Progress",
+    Done: "Done",
+    Blocked: "Blocked",
+    Delayed: "Delayed",
+  };
+  return labels[status] || status;
 }
 
 function TaskSummaryCards({ tasks, selectedDate }) {
@@ -267,68 +271,84 @@ function TaskAlerts({ tasks, selectedDate }) {
 }
 
 function TaskCard({ task, selectedDate, onUpdate }) {
+  const updatePending = isUpdatePending(task);
+  const etaMissed = isEtaMissed(task, selectedDate);
+
   return (
-    <article className={`tower-task-card ${statusClass(task.status)}`}>
-      <div className="task-card-top">
-        <strong>{task.workerName}</strong>
-        <span className={`task-status ${statusClass(task.status)}`}>{task.status}</span>
+    <article className={`simple-task-card ${statusClass(task.status)}`}>
+      <div className="simple-task-main">
+        <div className={`status-dot ${statusClass(task.status)}`} />
+        <div className="simple-task-copy">
+          <div className="simple-task-title-row">
+            <h3>{task.title}</h3>
+            <span className={`task-status ${statusClass(task.status)}`}>{statusLabel(task.status)}</span>
+          </div>
+          <p>{task.description}</p>
+          <div className="simple-task-meta">
+            <span>{task.customer}</span>
+            <span>{task.product}</span>
+            <span>{task.quantity}</span>
+            <span className={priorityClass(task.priority)}>{task.priority}</span>
+          </div>
+        </div>
       </div>
-      <h3>{task.title}</h3>
-      <p>{task.customer} / {task.product}</p>
-      <div className="task-meta-grid">
-        <span>Qty: {task.quantity}</span>
-        <span>ETA: {task.eta}</span>
-        <span className={priorityClass(task.priority)}>{task.priority}</span>
-        <span>{task.source}</span>
+      <div className="simple-task-side">
+        <div className="eta-block">
+          <span>ETA</span>
+          <strong>{task.eta}</strong>
+        </div>
+        <div className="simple-task-flags">
+          {updatePending && <span className="eta-miss">Update pending</span>}
+          {etaMissed && <span className="eta-miss">ETA miss</span>}
+          {!updatePending && !etaMissed && <span className="last-update">Last {displayTime(task.lastUpdatedAt)}</span>}
+        </div>
+        <button type="button" onClick={() => onUpdate(task)}>Update</button>
       </div>
-      <div className="task-card-foot">
-        <span>{isUpdatePending(task) ? "Update pending" : `Last ${displayTime(task.lastUpdatedAt)}`}</span>
-        {isEtaMissed(task, selectedDate) && <span className="eta-miss">ETA miss</span>}
-      </div>
-      <button type="button" onClick={() => onUpdate(task)}>Update Status</button>
     </article>
   );
 }
 
-function TaskBoard({ tasks, selectedDate, onUpdate }) {
-  const grouped = useMemo(() => {
-    const groups = {
-      Open: [],
-      "In Progress": [],
-      Done: [],
-      "Blocked/Delayed": [],
-    };
-    tasks.forEach((task) => {
-      if (task.status === "Blocked" || task.status === "Delayed") groups["Blocked/Delayed"].push(task);
-      else groups[task.status]?.push(task);
-    });
-    return groups;
-  }, [tasks]);
+function TaskBoard({ tasks, workers, selectedDate, onUpdate }) {
+  const groupedByWorker = useMemo(() => {
+    return workers
+      .map((worker) => ({
+        worker,
+        tasks: tasks.filter((task) => task.workerName === worker.name),
+      }))
+      .filter((group) => group.tasks.length > 0);
+  }, [tasks, workers]);
 
   return (
     <section className="heliqx-card">
       <div className="heliqx-section-title compact">
         <div>
           <p>Aaj ke tasks</p>
-          <h2>Worker task board</h2>
+          <h2>Simple worker-wise task status</h2>
         </div>
       </div>
-      <div className="task-board">
-        {BOARD_GROUPS.map((group) => (
-          <div key={group.key} className="task-column">
-            <div className="task-column-head">
-              <strong>{group.title}</strong>
-              <span>{grouped[group.key].length}</span>
+      <div className="simple-task-list">
+        {groupedByWorker.length === 0 ? (
+          <div className="empty-column">No matching tasks</div>
+        ) : groupedByWorker.map(({ worker, tasks: workerTasks }) => {
+          const done = workerTasks.filter((task) => task.status === "Done").length;
+          const problem = workerTasks.filter((task) => task.status === "Blocked" || task.status === "Delayed").length;
+          return (
+            <div key={worker.id} className="worker-task-group">
+              <div className="worker-task-head">
+                <div>
+                  <strong>{worker.name}</strong>
+                  <span>{workerTasks.length} tasks / {done} done</span>
+                </div>
+                {problem > 0 ? <span className="worker-problem">{problem} issue</span> : <span className="worker-ok">On track</span>}
+              </div>
+              <div className="worker-task-items">
+                {workerTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} selectedDate={selectedDate} onUpdate={onUpdate} />
+                ))}
+              </div>
             </div>
-            <div className="task-column-list">
-              {grouped[group.key].length === 0 ? (
-                <div className="empty-column">No tasks</div>
-              ) : grouped[group.key].map((task) => (
-                <TaskCard key={task.id} task={task} selectedDate={selectedDate} onUpdate={onUpdate} />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -443,9 +463,9 @@ export default function HeliqxControlTower() {
     <div className="heliqx-page">
       <section className="heliqx-hero">
         <div>
-          <p className="hero-eyebrow">By ARQ ONE AI Labs</p>
-          <h1>HELIQx Control Tower</h1>
-          <p>Voice-to-task workforce tracking for Pawan Engineering</p>
+          <p className="hero-eyebrow">HELIQx CT by ARQ ONE AI Labs</p>
+          <h1>HELIQx WorkGrid</h1>
+          <p>Client workspace: Pawan Engineering. Daily task management and worker status tracking.</p>
         </div>
         <div className="heliqx-hero-panel">
           <span>5 workers</span>
@@ -485,7 +505,7 @@ export default function HeliqxControlTower() {
         <TaskAlerts tasks={filteredTasks} selectedDate={selectedDate} />
       </div>
 
-      <TaskBoard tasks={filteredTasks} selectedDate={selectedDate} onUpdate={setModalTask} />
+      <TaskBoard tasks={filteredTasks} workers={workers} selectedDate={selectedDate} onUpdate={setModalTask} />
 
       <TaskUpdateModal task={modalTask} onClose={() => setModalTask(null)} onSave={saveUpdate} />
     </div>

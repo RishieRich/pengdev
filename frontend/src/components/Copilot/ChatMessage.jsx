@@ -22,7 +22,7 @@ export function UserMessage({ text, time }) {
 export function BotMessage({ text, time }) {
   return (
     <div className="msg-bot">
-      <div className="msg-head">Business Copilot</div>
+      <div className="msg-head">HELIQx CT Copilot</div>
       <div className="msg-text">{text}</div>
       <div className="msg-meta">{time}</div>
     </div>

@@ -1,4 +1,4 @@
-# Pawan Engineering Copilot
+# HELIQx CT by ARQ ONE AI Labs
 
 ## Quick Local Test
 

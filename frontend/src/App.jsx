@@ -20,7 +20,7 @@ const OWNER_PIN = "0317";
 
 function Logo() {
   return (
-    <div className="brand-mark" aria-label="Pawan Engineering">
+    <div className="brand-mark" aria-label="HELIQx CT">
       <svg viewBox="0 0 48 48" role="img" aria-hidden="true">
         <path d="M8 34V14h16c6.2 0 10 3.5 10 9s-3.8 9-10 9h-7v2h23v6H8v-6Zm9-8h7c2.5 0 4-1.1 4-3s-1.5-3-4-3h-7v6Z" />
         <path d="M36 12h4v16h-4z" />
@@ -169,7 +169,7 @@ export default function App() {
           )}
           <code>{String.raw`d:\AI_Projects\ARQ\pengpro1\input`}</code>
           <button type="button" className="missing-open-tower" onClick={() => setActiveModule("heliqx")}>
-            Open HELIQx Tasks
+            Open HELIQx WorkGrid
           </button>
         </div>
       </div>
@@ -183,9 +183,13 @@ export default function App() {
           <div className="brand">
             <Logo />
             <div>
-              <div className="brand-name">{data.company?.label || "Pawan Engineering"}</div>
-              <div className="brand-sub">{data.company?.period || "HELIQx Control Tower"}</div>
+              <div className="brand-name">HELIQx CT</div>
+              <div className="brand-sub">by ARQ ONE AI Labs</div>
             </div>
+          </div>
+          <div className="client-pill">
+            <span>Client</span>
+            <strong>{data.company?.label || "Pawan Engineering"}</strong>
           </div>
           <nav className="module-tabs" aria-label="Portal sections">
             <button
@@ -193,14 +197,14 @@ export default function App() {
               className={activeModule === "dashboard" ? "active" : ""}
               onClick={() => setActiveModule("dashboard")}
             >
-              KPI Dashboard
+              Business KPIs
             </button>
             <button
               type="button"
               className={activeModule === "heliqx" ? "active" : ""}
               onClick={() => setActiveModule("heliqx")}
             >
-              HELIQx Tasks
+              WorkGrid
             </button>
           </nav>
           <div className="built-by">
@@ -214,7 +218,7 @@ export default function App() {
             >
               Sign out
             </button>
-            <span>Built by <span className="built-by-name">ARQ ONE AI Labs</span></span>
+            <span>HELIQx CT by <span className="built-by-name">ARQ ONE AI Labs</span></span>
           </div>
         </div>
       </header>
@@ -247,8 +251,8 @@ export default function App() {
             <div className="hero-panel">
               <div className="hero-copy">
                 <p className="hero-eyebrow">Live workbook snapshot</p>
-                <h1>Pawan Engineering performance cockpit.</h1>
-                <p>Sales, purchases, margins and risk alerts sourced from the files in your input folder.</p>
+                <h1>Business cockpit for {data.company?.label || "Pawan Engineering"}.</h1>
+                <p>Powered by HELIQx CT. Sales, purchases, margins and risk alerts are sourced from the files in your input folder.</p>
 
                 <div className="filter-panel">
                   <div className="period-tabs" aria-label="Select tenure">
@@ -310,7 +314,7 @@ export default function App() {
 
         <footer className="footer">
           <div>Live workbook KPIs - overheads not modelled</div>
-          <div className="footer-arq">ARQ ONE AI Labs</div>
+          <div className="footer-arq">HELIQx CT by ARQ ONE AI Labs</div>
         </footer>
       </main>
     </div>

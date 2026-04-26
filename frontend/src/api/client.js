@@ -1,6 +1,6 @@
 /**
  * client.js
- * Axios-based API client for the Pawan Engineering Copilot backend.
+ * Axios-based API client for the HELIQx CT backend.
  */
 
 import axios from "axios";
