@@ -1,104 +1,274 @@
 """
-business_data.py
-Single source of truth — FY 2025-26 Pawan Engineering data
-Parsed from Sale_25-26.xlsx and Purchase_25-26.xlsx
+Load dashboard data from the root-level input folder.
+The dashboard should only show KPIs when the required workbooks exist.
 """
 
-PE_DATA = {
-    "company": {
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+
+import openpyxl
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+INPUT_DIR = PROJECT_ROOT / "input"
+FY_START = date(2025, 4, 1)
+FY_END = date(2026, 3, 31)
+MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+
+
+def _empty_data(message: str, missing_files: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "available": False,
+        "message": message,
+        "missingFiles": missing_files or [],
+        "inputDir": str(INPUT_DIR),
+        "company": {
+            "label": "Pawan Engineering",
+            "workbookName": "",
+            "address": "",
+            "udyam": "",
+            "period": "FY 2025-26 - Apr 2025 to Mar 2026",
+        },
+        "headline": None,
+        "monthly": [],
+        "topCustomers": [],
+        "topVendors": [],
+        "topProducts": [],
+        "topMaterials": [],
+        "alerts": [],
+        "dataNotes": [],
+    }
+
+
+def _find_required_files() -> tuple[Path | None, Path | None, list[str]]:
+    if not INPUT_DIR.exists():
+        return None, None, ["input folder"]
+
+    xlsx_files = [p for p in INPUT_DIR.glob("*.xlsx") if not p.name.startswith("~$")]
+    sale_file = next((p for p in xlsx_files if "sale" in p.name.lower()), None)
+    purchase_file = next((p for p in xlsx_files if "purchase" in p.name.lower()), None)
+
+    missing = []
+    if sale_file is None:
+        missing.append("Sale 25-26.xlsx")
+    if purchase_file is None:
+        missing.append("Purchase 25-26.xlsx")
+    return sale_file, purchase_file, missing
+
+
+def _is_fy_date(value: Any) -> bool:
+    if isinstance(value, datetime):
+        value = value.date()
+    return isinstance(value, date) and FY_START <= value <= FY_END
+
+
+def _clean_name(value: Any) -> str:
+    return " ".join(str(value or "").replace("\n", " ").split())
+
+
+def _pct(value: float, total: float) -> float:
+    return round((value / total * 100), 1) if total else 0
+
+
+def _top_rows(values: dict[str, float], counts: dict[str, int] | None, total: float, limit: int) -> list[dict[str, Any]]:
+    rows = []
+    for name, value in sorted(values.items(), key=lambda item: item[1], reverse=True)[:limit]:
+        row = {"name": name, "value": round(value, 2), "share": _pct(value, total)}
+        if counts is not None:
+            row["lines"] = counts.get(name, 0)
+        rows.append(row)
+    return rows
+
+
+def _read_company_meta(workbook: openpyxl.Workbook) -> dict[str, str]:
+    sheet = workbook.worksheets[0]
+    rows = list(sheet.iter_rows(min_row=1, max_row=7, values_only=True))
+    company = _clean_name(rows[0][0]) if rows else "Pawan Engineering"
+    address_1 = _clean_name(rows[1][0]) if len(rows) > 1 else ""
+    address_2 = _clean_name(rows[2][0]) if len(rows) > 2 else ""
+    udyam = _clean_name(rows[3][0]).replace("UDYAM :", "").strip() if len(rows) > 3 else ""
+    return {
         "label": "Pawan Engineering",
-        "workbookName": "Infinity Die Tools",
-        "address": "G-9 & 10, Chirag Industrial Complex, Daman 396210",
-        "udyam": "UDYAM-DD-01-0002992 (Micro)",
-        "period": "FY 2025-26 · Apr 2025 – Mar 2026",
-    },
-    "headline": {
-        "sales": 16828599.87,
-        "purchases": 9276268.92,
-        "grossProfit": 7552330.95,
-        "grossMarginPct": 44.88,
-        "salesCount": 337,
-        "purchaseCount": 56,
-        "customers": 28,
-        "vendors": 13,
-        "products": 23,
-        "top5CustShare": 70.36,
-        "top3VendShare": 72.10,
-    },
-    "monthly": [
-        {"m": "Apr", "sales": 633743,  "purchases": 629849,  "gp": 3894},
-        {"m": "May", "sales": 380171,  "purchases": 83878,   "gp": 296293},
-        {"m": "Jun", "sales": 337460,  "purchases": 134590,  "gp": 202870},
-        {"m": "Jul", "sales": 952710,  "purchases": 748177,  "gp": 204533},
-        {"m": "Aug", "sales": 1266062, "purchases": 564986,  "gp": 701076},
-        {"m": "Sep", "sales": 1749119, "purchases": 506477,  "gp": 1242642},
-        {"m": "Oct", "sales": 2126880, "purchases": 1540374, "gp": 586506},
-        {"m": "Nov", "sales": 2787039, "purchases": 1620767, "gp": 1166271},
-        {"m": "Dec", "sales": 3661259, "purchases": 1397923, "gp": 2263337},
-        {"m": "Jan", "sales": 887638,  "purchases": 536056,  "gp": 351583},
-        {"m": "Feb", "sales": 1667964, "purchases": 1025615, "gp": 642349},
-        {"m": "Mar", "sales": 378555,  "purchases": 487577,  "gp": -109022},
-    ],
-    "topCustomers": [
-        {"name": "Yash Seals Pvt. Ltd.",          "value": 6119100, "share": 36.4, "lines": 58},
-        {"name": "Unisto Corporation Pvt Ltd",     "value": 1878250, "share": 11.2, "lines": 27},
-        {"name": "Effectronic Technology Pvt Ltd", "value": 1528844, "share": 9.1,  "lines": 7},
-        {"name": "Sepio Products Pvt Ltd",         "value": 1300000, "share": 7.7,  "lines": 15},
-        {"name": "Premier Electronic Ind.",        "value": 1025900, "share": 6.1,  "lines": 19},
-        {"name": "Ekta Container Seals Pvt. Ltd",  "value": 800800,  "share": 4.8,  "lines": 23},
-    ],
-    "topVendors": [
-        {"name": "Ratan Steel Corporation",        "value": 2797248, "share": 30.2, "lines": 17},
-        {"name": "Golden Metal Private Limited",   "value": 2289128, "share": 24.7, "lines": 7},
-        {"name": "Jindal Metals & Alloys Limited", "value": 1600727, "share": 17.3, "lines": 3},
-        {"name": "Omshree Alloys",                 "value": 1168933, "share": 12.6, "lines": 6},
-        {"name": "Neminath Impex",                 "value": 558875,  "share": 6.0,  "lines": 4},
-    ],
-    "topProducts": [
-        {"name": "Seal - Spring - HIFI CROC",    "value": 5773300, "share": 34.3},
-        {"name": "Hi-Tech Seal Lock",            "value": 3482150, "share": 20.7},
-        {"name": "6 WATT DOWNLIGHT HEATSINK",    "value": 1606877, "share": 9.5},
-        {"name": "Strap Seal Logi Metal Insert", "value": 1300000, "share": 7.7},
-        {"name": "MS Connector Regular",         "value": 1025900, "share": 6.1},
-    ],
-    "topMaterials": [
-        {"name": "SS CR COILS",           "value": 4490514, "share": 48.4},
-        {"name": "SS 202 0.28 x 45 MM",  "value": 902632,  "share": 9.7},
-        {"name": "SS Coils 0.30 X 45 mm","value": 867224,  "share": 9.3},
-        {"name": "SS 304 0.50 x 52 mm",  "value": 558875,  "share": 6.0},
-    ],
-    "alerts": [
-        {
+        "workbookName": company,
+        "address": _clean_name(f"{address_1} {address_2}"),
+        "udyam": udyam,
+        "period": "FY 2025-26 - Apr 2025 to Mar 2026",
+    }
+
+
+def _read_register(workbook: openpyxl.Workbook, sheet_name: str, value_col: int) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, int]]:
+    sheet = workbook[sheet_name]
+    records = []
+    by_party: dict[str, float] = defaultdict(float)
+    counts: dict[str, int] = defaultdict(int)
+
+    for row in sheet.iter_rows(min_row=9, values_only=True):
+        row_date = row[0]
+        value = row[value_col] if len(row) > value_col else None
+        if not _is_fy_date(row_date) or not isinstance(value, (int, float)):
+            continue
+
+        party = _clean_name(row[1])
+        records.append({"date": row_date.date(), "party": party, "value": float(value)})
+        by_party[party] += float(value)
+        counts[party] += 1
+
+    return records, by_party, counts
+
+
+def _read_sales_products(sale_file: Path, sales_total: float) -> tuple[dict[str, float], dict[str, float], int]:
+    workbook = openpyxl.load_workbook(sale_file, read_only=True, data_only=True)
+    try:
+        sheet = workbook["Sheet1"] if "Sheet1" in workbook.sheetnames else workbook.worksheets[-1]
+        by_customer: dict[str, float] = defaultdict(float)
+        by_product: dict[str, float] = defaultdict(float)
+
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            customer = _clean_name(row[1] if len(row) > 1 else "")
+            product = _clean_name(row[2] if len(row) > 2 else "")
+            amount = row[5] if len(row) > 5 else None
+            if not customer or not product or not isinstance(amount, (int, float)):
+                continue
+            by_customer[customer] += float(amount)
+            by_product[product] += float(amount)
+
+        # Sheet1 carries line-level detail and may include the workbook total row.
+        # The dated Sales Register remains the source of truth for headline totals.
+        if not by_customer and sales_total:
+            return {}, {}, 0
+        return by_customer, by_product, len(by_product)
+    finally:
+        workbook.close()
+
+
+def _read_purchase_materials(workbook: openpyxl.Workbook, purchases_total: float) -> dict[str, float]:
+    sheet = workbook["Purchase Register"]
+    by_material: dict[str, float] = defaultdict(float)
+
+    for row in sheet.iter_rows(min_row=9, values_only=True):
+        if row[0] is not None:
+            continue
+        material = _clean_name(row[1] if len(row) > 1 else "")
+        value = row[4] if len(row) > 4 else None
+        if not material or material.lower() == "grand total" or not isinstance(value, (int, float)):
+            continue
+        by_material[material] += float(value)
+
+    return by_material
+
+
+def _build_alerts(headline: dict[str, Any], top_customers: list[dict[str, Any]], top_vendors: list[dict[str, Any]], monthly: list[dict[str, Any]]) -> list[dict[str, str]]:
+    alerts = []
+    if top_customers and top_customers[0]["share"] >= 30:
+        alerts.append({
             "sev": "high",
             "title": "Customer concentration zyada hai",
-            "detail": "Yash Seals akele 36.4% sales dete hain (₹61.19L). Top 5 customers milke 70.4%. Ek bhi bada account chhoot gaya toh seedha asar padega.",
-        },
-        {
-            "sev": "high",
-            "title": "March 2026 mein gross loss",
-            "detail": "Sales ₹3.78L vs purchases ₹4.87L → ₹1.09L ka gross loss. Sambhavtah procurement ya billing timing ka issue hai, real loss nahi. Accounts se confirm karwa lijiye.",
-        },
-        {
+            "detail": f"{top_customers[0]['name']} akele {top_customers[0]['share']}% sales dete hain. Top 5 customers milke {headline['top5CustShare']}%.",
+        })
+    if headline["top3VendShare"] >= 60:
+        alerts.append({
             "sev": "high",
             "title": "Vendor dependency check karein",
-            "detail": "Top 3 vendors (Ratan Steel, Golden Metal, Jindal) milke 72.1% supply karte hain. SS coil ke liye backup supplier ki zarurat hai.",
-        },
-        {
-            "sev": "medium",
-            "title": "SS CR Coils par bahut depend",
-            "detail": "SS CR COILS akele 48.4% purchases (₹44.9L). Stainless steel sheet ka rate badle toh margin pe seedha asar.",
-        },
-        {
-            "sev": "medium",
-            "title": "Dec ke baad sharp drop",
-            "detail": "Dec 2025 best month tha (₹36.61L). Jan 2026 mein ₹8.88L pe gir gaya (–75.8%). Check karna chahiye seasonal hai ya capacity ka issue.",
-        },
-    ],
-    "dataNotes": [
-        "Workbook header par naam 'Infinity Die Tools' likha hai, 'Pawan Engineering' nahi. Identity confirm karein.",
-        "Purchase Register visible total ₹96,45,550.92 hai, parsed line items ₹94,89,820.92 — ~₹1.55L ka gap (hidden row ho sakti hai).",
-        "Destination spellings normalized nahi hain (Hydarabad, Benslore, Deharadun jaise variants).",
-        "Gross profit mein salaries, rent, electricity, transport, finance, tax shamil nahi. Sirf trading view hai — net profit nahi.",
-        "Sale workbook Sheet7 product pivot total dated register se exactly match nahi karta. Dated register ko system of record maana gaya hai.",
-    ],
-}
+            "detail": f"Top 3 vendors milke {headline['top3VendShare']}% purchases karte hain. Backup suppliers validate karein.",
+        })
+    march = next((m for m in monthly if m["m"] == "Mar"), None)
+    if march and march["gp"] < 0:
+        alerts.append({
+            "sev": "high",
+            "title": "March 2026 mein gross loss",
+            "detail": "March gross profit negative hai. Procurement timing ya billing cutoff accounts se confirm karein.",
+        })
+    return alerts
+
+
+def load_business_data() -> dict[str, Any]:
+    sale_file, purchase_file, missing = _find_required_files()
+    if missing:
+        return _empty_data(
+            "Please check the input folder. Required data files are missing, so there are no KPIs to show.",
+            missing,
+        )
+
+    try:
+        purchase_workbook = openpyxl.load_workbook(purchase_file, read_only=True, data_only=True)
+        try:
+            company = _read_company_meta(purchase_workbook)
+            sales_records, sales_by_customer_register, sales_counts = _read_register(purchase_workbook, "Sales Register", 7)
+            purchase_records, purchase_by_vendor, purchase_counts = _read_register(purchase_workbook, "Purchase Register", 4)
+            sales_by_customer_detail, sales_by_product, product_count = _read_sales_products(sale_file, sum(r["value"] for r in sales_records))
+            purchase_by_material = _read_purchase_materials(purchase_workbook, sum(r["value"] for r in purchase_records))
+        finally:
+            purchase_workbook.close()
+    except Exception as exc:
+        return _empty_data(f"Input files could not be read: {exc}", [])
+
+    sales_total = round(sum(r["value"] for r in sales_records), 2)
+    purchases_total = round(sum(r["value"] for r in purchase_records), 2)
+    if sales_total <= 0 or purchases_total <= 0:
+        return _empty_data("Input files are present, but usable FY data was not found. No KPIs to show.", [])
+
+    sales_by_customer = sales_by_customer_detail or sales_by_customer_register
+    customers = len(sales_by_customer_register)
+    vendors = len(purchase_by_vendor)
+
+    monthly_sales: dict[str, float] = defaultdict(float)
+    monthly_purchases: dict[str, float] = defaultdict(float)
+    for row in sales_records:
+        monthly_sales[row["date"].strftime("%b")] += row["value"]
+    for row in purchase_records:
+        monthly_purchases[row["date"].strftime("%b")] += row["value"]
+
+    monthly = []
+    for month in MONTHS:
+        sales = round(monthly_sales[month], 2)
+        purchases = round(monthly_purchases[month], 2)
+        monthly.append({"m": month, "sales": sales, "purchases": purchases, "gp": round(sales - purchases, 2)})
+
+    gross_profit = round(sales_total - purchases_total, 2)
+    top_customers = _top_rows(sales_by_customer, sales_counts, sales_total, 6)
+    top_vendors = _top_rows(purchase_by_vendor, purchase_counts, purchases_total, 5)
+    top_products = _top_rows(sales_by_product, None, sales_total, 5)
+    top_materials = _top_rows(purchase_by_material, None, purchases_total, 5)
+
+    headline = {
+        "sales": sales_total,
+        "purchases": purchases_total,
+        "grossProfit": gross_profit,
+        "grossMarginPct": round((gross_profit / sales_total * 100), 2) if sales_total else 0,
+        "salesCount": len(sales_records),
+        "purchaseCount": len(purchase_records),
+        "customers": customers,
+        "vendors": vendors,
+        "products": product_count,
+        "top5CustShare": round(sum(c["share"] for c in top_customers[:5]), 1),
+        "top3VendShare": round(sum(v["share"] for v in top_vendors[:3]), 1),
+    }
+
+    return {
+        "available": True,
+        "message": "",
+        "missingFiles": [],
+        "inputDir": str(INPUT_DIR),
+        "sourceFiles": [sale_file.name, purchase_file.name],
+        "company": company,
+        "headline": headline,
+        "monthly": monthly,
+        "topCustomers": top_customers,
+        "topVendors": top_vendors,
+        "topProducts": top_products,
+        "topMaterials": top_materials,
+        "alerts": _build_alerts(headline, top_customers, top_vendors, monthly),
+        "dataNotes": [
+            "KPIs are loaded from the root input folder at request time.",
+            "Headline sales and purchases use dated FY rows from the registers and exclude grand totals.",
+            "Purchase rows after 31-Mar-2026 are excluded from FY 2025-26 KPIs.",
+            "Gross profit is trading-level only and excludes overheads, tax, finance cost, and payroll.",
+        ],
+    }
+
+
+PE_DATA = load_business_data()

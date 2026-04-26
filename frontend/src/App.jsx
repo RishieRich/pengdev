@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchDashboard } from "./api/client";
 import { fmtINR } from "./utils/format";
-import { STATIC_DASHBOARD_DATA } from "./data/businessData";
 import Dashboard from "./components/Dashboard/index";
 import Copilot from "./components/Copilot/index";
 
@@ -20,7 +19,11 @@ export default function App() {
       })
       .catch(() => {
         if (!mounted) return;
-        setData(STATIC_DASHBOARD_DATA);
+        setData({
+          available: false,
+          message: "Backend is not reachable. Please start the Python API and check the input folder.",
+          missingFiles: [],
+        });
         setApiStatus("offline");
       });
 
@@ -34,6 +37,30 @@ export default function App() {
       <div className="loading-screen">
         <div className="loading-spinner" />
         <p>Loading business data…</p>
+      </div>
+    );
+  }
+
+  if (data.available === false) {
+    return (
+      <div className="missing-screen">
+        <div className="missing-box">
+          <div className="missing-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7h5l2 2h11v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <path d="M12 13v3" />
+              <path d="M12 10h.01" />
+            </svg>
+          </div>
+          <h1>No KPIs to show</h1>
+          <p>{data.message || "Please check the input folder. The data is missing."}</p>
+          {data.missingFiles?.length > 0 && (
+            <div className="missing-files">
+              Required files: {data.missingFiles.join(", ")}
+            </div>
+          )}
+          <code>{String.raw`d:\AI_Projects\ARQ\pengpro1\input`}</code>
+        </div>
       </div>
     );
   }

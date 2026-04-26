@@ -11,9 +11,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 try:
-    from ..data.business_data import PE_DATA
+    from ..data.business_data import load_business_data
 except ImportError:
-    from data.business_data import PE_DATA
+    from data.business_data import load_business_data
 
 
 def _load_copilot():
@@ -38,7 +38,7 @@ def health():
 @router.get("/dashboard")
 def dashboard():
     """Return all business data for the frontend to render the dashboard."""
-    return PE_DATA
+    return load_business_data()
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
