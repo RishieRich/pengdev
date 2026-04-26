@@ -6,7 +6,11 @@ Each tool returns a clean text summary the LLM can reason over.
 
 import json
 from langchain_core.tools import tool
-from data.business_data import PE_DATA
+
+try:
+    from ..data.business_data import PE_DATA
+except ImportError:
+    from data.business_data import PE_DATA
 
 
 def _fmt_inr(n: float) -> str:

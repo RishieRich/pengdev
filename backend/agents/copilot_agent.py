@@ -9,7 +9,11 @@ from typing import Optional
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
-from tools.business_tools import ALL_TOOLS
+
+try:
+    from ..tools.business_tools import ALL_TOOLS
+except ImportError:
+    from tools.business_tools import ALL_TOOLS
 
 SYSTEM_PROMPT = """You are the Business Copilot for Pawan Engineering (entity: Infinity Die Tools), \
 built by ARQ ONE AI Labs. You are grounded exclusively in the FY 2025-26 sales and purchase data.

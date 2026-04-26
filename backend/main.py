@@ -5,12 +5,23 @@ Run: uvicorn main:app --reload --port 8000
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import router
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-load_dotenv()
+try:
+    from .api.routes import router
+except ImportError:
+    from api.routes import router
+
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_DIR.parent
+
+load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(BACKEND_DIR / ".env")
 
 app = FastAPI(
     title="Pawan Engineering · Business Copilot API",
@@ -29,9 +40,18 @@ app.add_middleware(
 
 app.include_router(router)
 
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+FRONTEND_INDEX = FRONTEND_DIST / "index.html"
+
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
 
 @app.get("/")
 def root():
+    if FRONTEND_INDEX.exists():
+        return FileResponse(FRONTEND_INDEX)
+
     groq_configured = bool(os.getenv("GROQ_API_KEY"))
     return {
         "service": "Pawan Engineering Copilot API",
@@ -39,3 +59,13 @@ def root():
         "llm_configured": groq_configured,
         "docs": "/docs",
     }
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def frontend(full_path: str):
+    requested = FRONTEND_DIST / full_path
+    if requested.is_file():
+        return FileResponse(requested)
+    if FRONTEND_INDEX.exists():
+        return FileResponse(FRONTEND_INDEX)
+    return root()

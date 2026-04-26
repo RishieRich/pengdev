@@ -18,7 +18,7 @@ const GREETING = {
   time: nowTime(),
 };
 
-export default function Copilot() {
+export default function Copilot({ apiOnline = true }) {
   const [messages, setMessages] = useState([GREETING]);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
@@ -32,6 +32,18 @@ export default function Copilot() {
 
     const userMsg = { id: uuidv4(), role: "user", text, time: nowTime() };
     setMessages((prev) => [...prev, userMsg]);
+
+    if (!apiOnline) {
+      const errMsg = {
+        id: uuidv4(),
+        role: "bot",
+        text: "Dashboard UI chal raha hai, but chat ke liye backend API connect nahi hai. Backend start karke page refresh karein.",
+        time: nowTime(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -70,7 +82,7 @@ export default function Copilot() {
               <div className="copilot-title">Business Copilot</div>
               <div className="copilot-sub">
                 <span className="online-dot" />
-                {loading ? "typing…" : "online · grounded in your books"}
+                {!apiOnline ? "UI-only mode" : loading ? "typing..." : "online - grounded in your books"}
               </div>
             </div>
           </div>

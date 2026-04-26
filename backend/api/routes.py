@@ -9,8 +9,19 @@ FastAPI route definitions.
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from data.business_data import PE_DATA
-from agents.copilot_agent import chat, clear_session
+
+try:
+    from ..data.business_data import PE_DATA
+except ImportError:
+    from data.business_data import PE_DATA
+
+
+def _load_copilot():
+    try:
+        from ..agents.copilot_agent import chat, clear_session
+    except ImportError:
+        from agents.copilot_agent import chat, clear_session
+    return chat, clear_session
 
 router = APIRouter(prefix="/api")
 
@@ -45,6 +56,7 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest):
     """Send a message to the LangGraph copilot agent."""
+    chat, _ = _load_copilot()
     response = chat(req.message, req.session_id)
     return ChatResponse(response=response, session_id=req.session_id)
 
@@ -56,5 +68,6 @@ class ClearRequest(BaseModel):
 @router.post("/chat/clear")
 def clear_chat(req: ClearRequest):
     """Clear conversation history for a session."""
+    _, clear_session = _load_copilot()
     clear_session(req.session_id)
     return {"cleared": True, "session_id": req.session_id}

@@ -5,8 +5,10 @@
 
 import axios from "axios";
 
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, "");
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: configuredBaseUrl || "/api",
   timeout: 60000, // 60s — LLM calls can be slow
   headers: { "Content-Type": "application/json" },
 });

@@ -1,31 +1,33 @@
 import React, { useEffect, useState } from "react";
 import { fetchDashboard } from "./api/client";
+import { fmtINR } from "./utils/format";
+import { STATIC_DASHBOARD_DATA } from "./data/businessData";
 import Dashboard from "./components/Dashboard/index";
 import Copilot from "./components/Copilot/index";
 
 export default function App() {
   const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [apiStatus, setApiStatus] = useState("checking");
 
   useEffect(() => {
-    fetchDashboard()
-      .then(setData)
-      .catch(() =>
-        setError("Backend se data nahi aaya. Make sure the Python server is running on port 8000.")
-      );
-  }, []);
+    let mounted = true;
 
-  if (error) {
-    return (
-      <div className="error-screen">
-        <div className="error-box">
-          <strong>Connection Error</strong>
-          <p>{error}</p>
-          <code>cd backend &amp;&amp; uvicorn main:app --reload</code>
-        </div>
-      </div>
-    );
-  }
+    fetchDashboard()
+      .then((dashboard) => {
+        if (!mounted) return;
+        setData(dashboard);
+        setApiStatus("online");
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setData(STATIC_DASHBOARD_DATA);
+        setApiStatus("offline");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   if (!data) {
     return (
@@ -54,6 +56,18 @@ export default function App() {
       </header>
 
       <main className="container main">
+        {apiStatus === "offline" && (
+          <div className="banner">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+            </svg>
+            <div>
+              <strong>Dashboard is running in UI-only mode.</strong> Static FY data is loaded,
+              but chat needs the Python API on port 8000.
+            </div>
+          </div>
+        )}
+
         <div className="banner banner-amber">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
@@ -66,9 +80,33 @@ export default function App() {
           </div>
         </div>
 
+        <div className="hero-panel">
+          <div className="hero-copy">
+            <p className="hero-eyebrow">Instant FY snapshot</p>
+            <h1>
+              Pawan Engineering performance, clear and modern.
+            </h1>
+            <p>One screen view of sales, purchases, margins and risk alerts — grounded in your FY 25-26 books.</p>
+          </div>
+          <div className="hero-stats">
+            <div className="hero-stat">
+              <div className="hero-stat-label">Sales captured</div>
+              <div className="hero-stat-value">{fmtINR(data.headline.sales)}</div>
+            </div>
+            <div className="hero-stat">
+              <div className="hero-stat-label">Purchases captured</div>
+              <div className="hero-stat-value">{fmtINR(data.headline.purchases)}</div>
+            </div>
+            <div className="hero-stat">
+              <div className="hero-stat-label">Gross profit</div>
+              <div className="hero-stat-value">{fmtINR(data.headline.grossProfit)}</div>
+            </div>
+          </div>
+        </div>
+
         <div className="main-grid">
           <Dashboard data={data} />
-          <Copilot />
+          <Copilot apiOnline={apiStatus === "online"} />
         </div>
 
         <footer className="footer">
