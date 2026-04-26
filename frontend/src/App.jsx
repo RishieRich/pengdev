@@ -3,6 +3,7 @@ import { fetchDashboard } from "./api/client";
 import { fmtINR } from "./utils/format";
 import Dashboard from "./components/Dashboard/index";
 import Copilot from "./components/Copilot/index";
+import HeliqxControlTower from "./components/Heliqx/HeliqxControlTower";
 
 const PERIODS = [
   { value: "fy", label: "FY" },
@@ -97,6 +98,7 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState("checking");
   const [filters, setFilters] = useState({ period: "fy", q: "" });
   const [queryDraft, setQueryDraft] = useState("");
+  const [activeModule, setActiveModule] = useState("dashboard");
 
   useEffect(() => {
     if (!authed) return;
@@ -147,7 +149,7 @@ export default function App() {
     );
   }
 
-  if (data.available === false || !data.headline) {
+  if ((data.available === false || !data.headline) && activeModule === "dashboard") {
     return (
       <div className="missing-screen">
         <div className="missing-box">
@@ -166,6 +168,9 @@ export default function App() {
             </div>
           )}
           <code>{String.raw`d:\AI_Projects\ARQ\pengpro1\input`}</code>
+          <button type="button" className="missing-open-tower" onClick={() => setActiveModule("heliqx")}>
+            Open HELIQx Tasks
+          </button>
         </div>
       </div>
     );
@@ -178,10 +183,26 @@ export default function App() {
           <div className="brand">
             <Logo />
             <div>
-              <div className="brand-name">{data.company.label}</div>
-              <div className="brand-sub">{data.company.period}</div>
+              <div className="brand-name">{data.company?.label || "Pawan Engineering"}</div>
+              <div className="brand-sub">{data.company?.period || "HELIQx Control Tower"}</div>
             </div>
           </div>
+          <nav className="module-tabs" aria-label="Portal sections">
+            <button
+              type="button"
+              className={activeModule === "dashboard" ? "active" : ""}
+              onClick={() => setActiveModule("dashboard")}
+            >
+              KPI Dashboard
+            </button>
+            <button
+              type="button"
+              className={activeModule === "heliqx" ? "active" : ""}
+              onClick={() => setActiveModule("heliqx")}
+            >
+              HELIQx Tasks
+            </button>
+          </nav>
           <div className="built-by">
             <button
               className="signout-btn"
@@ -219,67 +240,73 @@ export default function App() {
           </div>
         )}
 
-        <div className="hero-panel">
-          <div className="hero-copy">
-            <p className="hero-eyebrow">Live workbook snapshot</p>
-            <h1>Pawan Engineering performance cockpit.</h1>
-            <p>Sales, purchases, margins and risk alerts sourced from the files in your input folder.</p>
+        {activeModule === "heliqx" ? (
+          <HeliqxControlTower />
+        ) : (
+          <>
+            <div className="hero-panel">
+              <div className="hero-copy">
+                <p className="hero-eyebrow">Live workbook snapshot</p>
+                <h1>Pawan Engineering performance cockpit.</h1>
+                <p>Sales, purchases, margins and risk alerts sourced from the files in your input folder.</p>
 
-            <div className="filter-panel">
-              <div className="period-tabs" aria-label="Select tenure">
-                {PERIODS.map((period) => (
-                  <button
-                    key={period.value}
-                    type="button"
-                    className={filters.period === period.value ? "active" : ""}
-                    onClick={() => setPeriod(period.value)}
-                  >
-                    {period.label}
-                  </button>
-                ))}
+                <div className="filter-panel">
+                  <div className="period-tabs" aria-label="Select tenure">
+                    {PERIODS.map((period) => (
+                      <button
+                        key={period.value}
+                        type="button"
+                        className={filters.period === period.value ? "active" : ""}
+                        onClick={() => setPeriod(period.value)}
+                      >
+                        {period.label}
+                      </button>
+                    ))}
+                  </div>
+                  <form className="filter-search" onSubmit={applySearch}>
+                    <input
+                      value={queryDraft}
+                      onChange={(event) => setQueryDraft(event.target.value)}
+                      placeholder="Filter customer, vendor, product"
+                    />
+                    <button type="submit">Apply</button>
+                    {filters.q && (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => {
+                          setQueryDraft("");
+                          setFilters((current) => ({ ...current, q: "" }));
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </form>
+                </div>
               </div>
-              <form className="filter-search" onSubmit={applySearch}>
-                <input
-                  value={queryDraft}
-                  onChange={(event) => setQueryDraft(event.target.value)}
-                  placeholder="Filter customer, vendor, product"
-                />
-                <button type="submit">Apply</button>
-                {filters.q && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => {
-                      setQueryDraft("");
-                      setFilters((current) => ({ ...current, q: "" }));
-                    }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </form>
+              <div className="hero-stats">
+                <div className="hero-stat">
+                  <div className="hero-stat-label">Sales captured</div>
+                  <div className="hero-stat-value">{fmtINR(data.headline.sales)}</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-label">Purchases captured</div>
+                  <div className="hero-stat-value">{fmtINR(data.headline.purchases)}</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-label">Gross profit</div>
+                  <div className="hero-stat-value">{fmtINR(data.headline.grossProfit)}</div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="hero-stats">
-            <div className="hero-stat">
-              <div className="hero-stat-label">Sales captured</div>
-              <div className="hero-stat-value">{fmtINR(data.headline.sales)}</div>
-            </div>
-            <div className="hero-stat">
-              <div className="hero-stat-label">Purchases captured</div>
-              <div className="hero-stat-value">{fmtINR(data.headline.purchases)}</div>
-            </div>
-            <div className="hero-stat">
-              <div className="hero-stat-label">Gross profit</div>
-              <div className="hero-stat-value">{fmtINR(data.headline.grossProfit)}</div>
-            </div>
-          </div>
-        </div>
 
-        <div className="main-grid">
-          <Dashboard data={data} />
-          <Copilot apiOnline={apiStatus === "online"} />
-        </div>
+            <div className="main-grid">
+              <Dashboard data={data} />
+              <Copilot apiOnline={apiStatus === "online"} />
+            </div>
+          </>
+        )}
 
         <footer className="footer">
           <div>Live workbook KPIs - overheads not modelled</div>
