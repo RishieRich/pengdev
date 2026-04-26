@@ -15,6 +15,8 @@ const PERIODS = [
   { value: "last90", label: "90D" },
 ];
 
+const OWNER_PIN = "0317";
+
 function Logo() {
   return (
     <div className="brand-mark" aria-label="Pawan Engineering">
@@ -26,13 +28,79 @@ function Logo() {
   );
 }
 
+function SignIn({ onSuccess }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    if (pin === OWNER_PIN) {
+      sessionStorage.setItem("pe_owner_session", "active");
+      onSuccess();
+      return;
+    }
+    setError("PIN galat hai. Please try again.");
+    setPin("");
+  }
+
+  return (
+    <div className="signin-screen">
+      <div className="signin-shell">
+        <div className="signin-orbit">
+          <div className="signin-logo">
+            <Logo />
+          </div>
+          <span className="orbit-dot dot-one" />
+          <span className="orbit-dot dot-two" />
+          <span className="orbit-dot dot-three" />
+        </div>
+
+        <div className="signin-copy">
+          <p className="hero-eyebrow">Owner access</p>
+          <h1>Welcome Pawan Seth</h1>
+          <p>Secure dashboard ready hai. PIN enter karke live business cockpit open karein.</p>
+        </div>
+
+        <form className="pin-card" onSubmit={submit}>
+          <label htmlFor="owner-pin">Owner PIN</label>
+          <div className="pin-row">
+            <input
+              id="owner-pin"
+              value={pin}
+              onChange={(event) => {
+                setError("");
+                setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
+              }}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              type="password"
+              placeholder="••••"
+              autoFocus
+            />
+            <button type="submit">Unlock</button>
+          </div>
+          <div className="pin-dots" aria-hidden="true">
+            {[0, 1, 2, 3].map((index) => (
+              <span key={index} className={pin.length > index ? "filled" : ""} />
+            ))}
+          </div>
+          {error && <div className="pin-error">{error}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem("pe_owner_session") === "active");
   const [data, setData] = useState(null);
   const [apiStatus, setApiStatus] = useState("checking");
   const [filters, setFilters] = useState({ period: "fy", q: "" });
   const [queryDraft, setQueryDraft] = useState("");
 
   useEffect(() => {
+    if (!authed) return;
+
     let mounted = true;
     setData(null);
 
@@ -55,7 +123,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [filters]);
+  }, [authed, filters]);
 
   function setPeriod(period) {
     setFilters((current) => ({ ...current, period }));
@@ -64,6 +132,10 @@ export default function App() {
   function applySearch(event) {
     event.preventDefault();
     setFilters((current) => ({ ...current, q: queryDraft.trim() }));
+  }
+
+  if (!authed) {
+    return <SignIn onSuccess={() => setAuthed(true)} />;
   }
 
   if (!data) {
@@ -111,7 +183,17 @@ export default function App() {
             </div>
           </div>
           <div className="built-by">
-            Built by <span className="built-by-name">ARQ ONE AI Labs</span>
+            <button
+              className="signout-btn"
+              type="button"
+              onClick={() => {
+                sessionStorage.removeItem("pe_owner_session");
+                setAuthed(false);
+              }}
+            >
+              Sign out
+            </button>
+            <span>Built by <span className="built-by-name">ARQ ONE AI Labs</span></span>
           </div>
         </div>
       </header>
