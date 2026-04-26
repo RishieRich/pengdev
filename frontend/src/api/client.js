@@ -13,8 +13,8 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-export async function fetchDashboard() {
-  const { data } = await api.get("/dashboard");
+export async function fetchDashboard(filters = {}) {
+  const { data } = await api.get("/dashboard", { params: filters });
   return data;
 }
 

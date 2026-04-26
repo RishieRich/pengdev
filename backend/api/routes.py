@@ -7,7 +7,7 @@ FastAPI route definitions.
   GET  /api/health     — health check
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 try:
@@ -36,9 +36,14 @@ def health():
 # ── Dashboard data ────────────────────────────────────────────────────────────
 
 @router.get("/dashboard")
-def dashboard():
+def dashboard(
+    period: str = Query("fy"),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    q: str | None = Query(None),
+):
     """Return all business data for the frontend to render the dashboard."""
-    return load_business_data()
+    return load_business_data(period=period, start_date=start_date, end_date=end_date, q=q)
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────

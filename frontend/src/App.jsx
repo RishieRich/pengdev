@@ -4,14 +4,39 @@ import { fmtINR } from "./utils/format";
 import Dashboard from "./components/Dashboard/index";
 import Copilot from "./components/Copilot/index";
 
+const PERIODS = [
+  { value: "fy", label: "FY" },
+  { value: "q1", label: "Q1" },
+  { value: "q2", label: "Q2" },
+  { value: "q3", label: "Q3" },
+  { value: "q4", label: "Q4" },
+  { value: "h1", label: "H1" },
+  { value: "h2", label: "H2" },
+  { value: "last90", label: "90D" },
+];
+
+function Logo() {
+  return (
+    <div className="brand-mark" aria-label="Pawan Engineering">
+      <svg viewBox="0 0 48 48" role="img" aria-hidden="true">
+        <path d="M8 34V14h16c6.2 0 10 3.5 10 9s-3.8 9-10 9h-7v2h23v6H8v-6Zm9-8h7c2.5 0 4-1.1 4-3s-1.5-3-4-3h-7v6Z" />
+        <path d="M36 12h4v16h-4z" />
+      </svg>
+    </div>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState(null);
   const [apiStatus, setApiStatus] = useState("checking");
+  const [filters, setFilters] = useState({ period: "fy", q: "" });
+  const [queryDraft, setQueryDraft] = useState("");
 
   useEffect(() => {
     let mounted = true;
+    setData(null);
 
-    fetchDashboard()
+    fetchDashboard(filters)
       .then((dashboard) => {
         if (!mounted) return;
         setData(dashboard);
@@ -30,18 +55,27 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [filters]);
+
+  function setPeriod(period) {
+    setFilters((current) => ({ ...current, period }));
+  }
+
+  function applySearch(event) {
+    event.preventDefault();
+    setFilters((current) => ({ ...current, q: queryDraft.trim() }));
+  }
 
   if (!data) {
     return (
       <div className="loading-screen">
         <div className="loading-spinner" />
-        <p>Loading business data…</p>
+        <p>Loading business data...</p>
       </div>
     );
   }
 
-  if (data.available === false) {
+  if (data.available === false || !data.headline) {
     return (
       <div className="missing-screen">
         <div className="missing-box">
@@ -70,7 +104,7 @@ export default function App() {
       <header className="topbar">
         <div className="container topbar-inner">
           <div className="brand">
-            <div className="brand-mark">PE</div>
+            <Logo />
             <div>
               <div className="brand-name">{data.company.label}</div>
               <div className="brand-sub">{data.company.period}</div>
@@ -89,31 +123,60 @@ export default function App() {
               <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
             </svg>
             <div>
-              <strong>Dashboard is running in UI-only mode.</strong> Static FY data is loaded,
-              but chat needs the Python API on port 8000.
+              <strong>Backend is offline.</strong> Start the Python API on port 8000 to load live workbook data and enable chat.
             </div>
           </div>
         )}
 
-        <div className="banner banner-amber">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-          </svg>
-          <div>
-            <strong>Identity check:</strong> source workbooks par naam{" "}
-            <strong>Infinity Die Tools</strong> (UDYAM-DD-01-0002992, Daman) likha hai.
-            Dashboard label aapke request ke hisaab se "Pawan Engineering" rakha hai — please
-            confirm karein dono ek hi entity hain.
+        {data.message && (
+          <div className="banner banner-neutral">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+            </svg>
+            <div>{data.message}</div>
           </div>
-        </div>
+        )}
 
         <div className="hero-panel">
           <div className="hero-copy">
-            <p className="hero-eyebrow">Instant FY snapshot</p>
-            <h1>
-              Pawan Engineering performance, clear and modern.
-            </h1>
-            <p>One screen view of sales, purchases, margins and risk alerts — grounded in your FY 25-26 books.</p>
+            <p className="hero-eyebrow">Live workbook snapshot</p>
+            <h1>Pawan Engineering performance cockpit.</h1>
+            <p>Sales, purchases, margins and risk alerts sourced from the files in your input folder.</p>
+
+            <div className="filter-panel">
+              <div className="period-tabs" aria-label="Select tenure">
+                {PERIODS.map((period) => (
+                  <button
+                    key={period.value}
+                    type="button"
+                    className={filters.period === period.value ? "active" : ""}
+                    onClick={() => setPeriod(period.value)}
+                  >
+                    {period.label}
+                  </button>
+                ))}
+              </div>
+              <form className="filter-search" onSubmit={applySearch}>
+                <input
+                  value={queryDraft}
+                  onChange={(event) => setQueryDraft(event.target.value)}
+                  placeholder="Filter customer, vendor, product"
+                />
+                <button type="submit">Apply</button>
+                {filters.q && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setQueryDraft("");
+                      setFilters((current) => ({ ...current, q: "" }));
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </form>
+            </div>
           </div>
           <div className="hero-stats">
             <div className="hero-stat">
@@ -137,7 +200,7 @@ export default function App() {
         </div>
 
         <footer className="footer">
-          <div>Demo · figures grounded in FY 25-26 books · overheads not modelled</div>
+          <div>Live workbook KPIs - overheads not modelled</div>
           <div className="footer-arq">ARQ ONE AI Labs</div>
         </footer>
       </main>

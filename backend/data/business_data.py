@@ -6,7 +6,7 @@ The dashboard should only show KPIs when the required workbooks exist.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +66,40 @@ def _is_fy_date(value: Any) -> bool:
     return isinstance(value, date) and FY_START <= value <= FY_END
 
 
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _range_for_period(period: str | None) -> tuple[date, date]:
+    ranges = {
+        "fy": (FY_START, FY_END),
+        "q1": (date(2025, 4, 1), date(2025, 6, 30)),
+        "q2": (date(2025, 7, 1), date(2025, 9, 30)),
+        "q3": (date(2025, 10, 1), date(2025, 12, 31)),
+        "q4": (date(2026, 1, 1), FY_END),
+        "h1": (date(2025, 4, 1), date(2025, 9, 30)),
+        "h2": (date(2025, 10, 1), FY_END),
+        "last90": (FY_END - timedelta(days=89), FY_END),
+    }
+    return ranges.get(period or "fy", ranges["fy"])
+
+
+def _in_range(value: date, start: date, end: date) -> bool:
+    return start <= value <= end
+
+
+def _matches_query(values: list[str], query: str) -> bool:
+    if not query:
+        return True
+    haystack = " ".join(values).lower()
+    return query.lower() in haystack
+
+
 def _clean_name(value: Any) -> str:
     return " ".join(str(value or "").replace("\n", " ").split())
 
@@ -100,6 +134,101 @@ def _read_company_meta(workbook: openpyxl.Workbook) -> dict[str, str]:
     }
 
 
+def _read_sales_register(workbook: openpyxl.Workbook) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    sheet = workbook["Sales Register"]
+    invoices = []
+    lines = []
+    current_date = None
+    current_customer = ""
+
+    for row in sheet.iter_rows(min_row=9, values_only=True):
+        row_date = row[0]
+        value = row[7] if len(row) > 7 else None
+
+        if _is_fy_date(row_date) and isinstance(value, (int, float)):
+            current_date = row_date.date()
+            current_customer = _clean_name(row[1])
+            invoices.append({"date": current_date, "party": current_customer, "value": float(value)})
+            continue
+        if isinstance(row_date, datetime):
+            current_date = None
+            current_customer = ""
+            continue
+
+        product = _clean_name(row[1] if len(row) > 1 else "")
+        if current_date and product and product.lower() != "grand total" and isinstance(value, (int, float)):
+            lines.append({
+                "date": current_date,
+                "party": current_customer,
+                "product": product,
+                "value": float(value),
+            })
+
+    return invoices, lines
+
+
+def _read_purchase_register(workbook: openpyxl.Workbook) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    sheet = workbook["Purchase Register"]
+    invoices = []
+    lines = []
+    current_date = None
+    current_vendor = ""
+
+    for row in sheet.iter_rows(min_row=9, values_only=True):
+        row_date = row[0]
+        value = row[4] if len(row) > 4 else None
+
+        if _is_fy_date(row_date) and isinstance(value, (int, float)):
+            current_date = row_date.date()
+            current_vendor = _clean_name(row[1])
+            invoices.append({"date": current_date, "party": current_vendor, "value": float(value)})
+            continue
+        if isinstance(row_date, datetime):
+            current_date = None
+            current_vendor = ""
+            continue
+
+        material = _clean_name(row[1] if len(row) > 1 else "")
+        if current_date and material and material.lower() != "grand total" and isinstance(value, (int, float)):
+            lines.append({
+                "date": current_date,
+                "party": current_vendor,
+                "material": material,
+                "value": float(value),
+            })
+
+    return invoices, lines
+
+
+def _group_by_party(records: list[dict[str, Any]]) -> tuple[dict[str, float], dict[str, int]]:
+    values: dict[str, float] = defaultdict(float)
+    counts: dict[str, int] = defaultdict(int)
+    for record in records:
+        values[record["party"]] += record["value"]
+        counts[record["party"]] += 1
+    return values, counts
+
+
+def _group_by_key(records: list[dict[str, Any]], key: str) -> dict[str, float]:
+    values: dict[str, float] = defaultdict(float)
+    for record in records:
+        name = record.get(key, "")
+        if name:
+            values[name] += record["value"]
+    return values
+
+
+def _filter_records(records: list[dict[str, Any]], start: date, end: date, query: str, keys: list[str]) -> list[dict[str, Any]]:
+    filtered = []
+    for record in records:
+        if not _in_range(record["date"], start, end):
+            continue
+        if not _matches_query([str(record.get(key, "")) for key in keys], query):
+            continue
+        filtered.append(record)
+    return filtered
+
+
 def _read_register(workbook: openpyxl.Workbook, sheet_name: str, value_col: int) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, int]]:
     sheet = workbook[sheet_name]
     records = []
@@ -118,47 +247,6 @@ def _read_register(workbook: openpyxl.Workbook, sheet_name: str, value_col: int)
         counts[party] += 1
 
     return records, by_party, counts
-
-
-def _read_sales_products(sale_file: Path, sales_total: float) -> tuple[dict[str, float], dict[str, float], int]:
-    workbook = openpyxl.load_workbook(sale_file, read_only=True, data_only=True)
-    try:
-        sheet = workbook["Sheet1"] if "Sheet1" in workbook.sheetnames else workbook.worksheets[-1]
-        by_customer: dict[str, float] = defaultdict(float)
-        by_product: dict[str, float] = defaultdict(float)
-
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            customer = _clean_name(row[1] if len(row) > 1 else "")
-            product = _clean_name(row[2] if len(row) > 2 else "")
-            amount = row[5] if len(row) > 5 else None
-            if not customer or not product or not isinstance(amount, (int, float)):
-                continue
-            by_customer[customer] += float(amount)
-            by_product[product] += float(amount)
-
-        # Sheet1 carries line-level detail and may include the workbook total row.
-        # The dated Sales Register remains the source of truth for headline totals.
-        if not by_customer and sales_total:
-            return {}, {}, 0
-        return by_customer, by_product, len(by_product)
-    finally:
-        workbook.close()
-
-
-def _read_purchase_materials(workbook: openpyxl.Workbook, purchases_total: float) -> dict[str, float]:
-    sheet = workbook["Purchase Register"]
-    by_material: dict[str, float] = defaultdict(float)
-
-    for row in sheet.iter_rows(min_row=9, values_only=True):
-        if row[0] is not None:
-            continue
-        material = _clean_name(row[1] if len(row) > 1 else "")
-        value = row[4] if len(row) > 4 else None
-        if not material or material.lower() == "grand total" or not isinstance(value, (int, float)):
-            continue
-        by_material[material] += float(value)
-
-    return by_material
 
 
 def _build_alerts(headline: dict[str, Any], top_customers: list[dict[str, Any]], top_vendors: list[dict[str, Any]], monthly: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -185,7 +273,12 @@ def _build_alerts(headline: dict[str, Any], top_customers: list[dict[str, Any]],
     return alerts
 
 
-def load_business_data() -> dict[str, Any]:
+def load_business_data(
+    period: str | None = "fy",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    q: str | None = None,
+) -> dict[str, Any]:
     sale_file, purchase_file, missing = _find_required_files()
     if missing:
         return _empty_data(
@@ -197,22 +290,64 @@ def load_business_data() -> dict[str, Any]:
         purchase_workbook = openpyxl.load_workbook(purchase_file, read_only=True, data_only=True)
         try:
             company = _read_company_meta(purchase_workbook)
-            sales_records, sales_by_customer_register, sales_counts = _read_register(purchase_workbook, "Sales Register", 7)
-            purchase_records, purchase_by_vendor, purchase_counts = _read_register(purchase_workbook, "Purchase Register", 4)
-            sales_by_customer_detail, sales_by_product, product_count = _read_sales_products(sale_file, sum(r["value"] for r in sales_records))
-            purchase_by_material = _read_purchase_materials(purchase_workbook, sum(r["value"] for r in purchase_records))
+            sales_records, sales_lines = _read_sales_register(purchase_workbook)
+            purchase_records, purchase_lines = _read_purchase_register(purchase_workbook)
         finally:
             purchase_workbook.close()
     except Exception as exc:
         return _empty_data(f"Input files could not be read: {exc}", [])
 
+    range_start, range_end = _range_for_period(period)
+    range_start = _parse_date(start_date) or range_start
+    range_end = _parse_date(end_date) or range_end
+    if range_start > range_end:
+        range_start, range_end = range_end, range_start
+    query = (q or "").strip()
+
+    sales_records = _filter_records(sales_records, range_start, range_end, query, ["party"])
+    sales_lines = _filter_records(sales_lines, range_start, range_end, query, ["party", "product"])
+    purchase_records = _filter_records(purchase_records, range_start, range_end, query, ["party"])
+    purchase_lines = _filter_records(purchase_lines, range_start, range_end, query, ["party", "material"])
+
     sales_total = round(sum(r["value"] for r in sales_records), 2)
     purchases_total = round(sum(r["value"] for r in purchase_records), 2)
-    if sales_total <= 0 or purchases_total <= 0:
-        return _empty_data("Input files are present, but usable FY data was not found. No KPIs to show.", [])
+    if sales_total <= 0 and purchases_total <= 0:
+        return {
+            "available": True,
+            "message": "No matching records found for this filter.",
+            "missingFiles": [],
+            "inputDir": str(INPUT_DIR),
+            "sourceFiles": [sale_file.name, purchase_file.name],
+            "filters": {"period": period or "fy", "startDate": range_start.isoformat(), "endDate": range_end.isoformat(), "q": query},
+            "company": company,
+            "headline": {
+                "sales": 0,
+                "purchases": 0,
+                "grossProfit": 0,
+                "grossMarginPct": 0,
+                "salesCount": 0,
+                "purchaseCount": 0,
+                "customers": 0,
+                "vendors": 0,
+                "products": 0,
+                "top5CustShare": 0,
+                "top3VendShare": 0,
+            },
+            "monthly": [{"m": month, "sales": 0, "purchases": 0, "gp": 0} for month in MONTHS],
+            "topCustomers": [],
+            "topVendors": [],
+            "topProducts": [],
+            "topMaterials": [],
+            "alerts": [],
+            "dataNotes": ["No rows matched the selected tenure or search filter."],
+        }
 
-    sales_by_customer = sales_by_customer_detail or sales_by_customer_register
-    customers = len(sales_by_customer_register)
+    sales_by_customer, sales_counts = _group_by_party(sales_records)
+    purchase_by_vendor, purchase_counts = _group_by_party(purchase_records)
+    sales_by_product = _group_by_key(sales_lines, "product")
+    purchase_by_material = _group_by_key(purchase_lines, "material")
+
+    customers = len(sales_by_customer)
     vendors = len(purchase_by_vendor)
 
     monthly_sales: dict[str, float] = defaultdict(float)
@@ -243,7 +378,7 @@ def load_business_data() -> dict[str, Any]:
         "purchaseCount": len(purchase_records),
         "customers": customers,
         "vendors": vendors,
-        "products": product_count,
+        "products": len(sales_by_product),
         "top5CustShare": round(sum(c["share"] for c in top_customers[:5]), 1),
         "top3VendShare": round(sum(v["share"] for v in top_vendors[:3]), 1),
     }
@@ -254,6 +389,7 @@ def load_business_data() -> dict[str, Any]:
         "missingFiles": [],
         "inputDir": str(INPUT_DIR),
         "sourceFiles": [sale_file.name, purchase_file.name],
+        "filters": {"period": period or "fy", "startDate": range_start.isoformat(), "endDate": range_end.isoformat(), "q": query},
         "company": company,
         "headline": headline,
         "monthly": monthly,
